@@ -45,7 +45,7 @@ OPENXPKI_ADVANCED=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aisc
 | --- | --- |
 | CTID | next free ID from `pvesh get /cluster/nextid` |
 | Hostname | `openxpki` |
-| OS template | Debian 12 standard LXC template |
+| OS template | auto-resolved latest Debian 12 standard LXC template from `pveam available` |
 | CPU | 2 cores |
 | RAM | 2048 MiB |
 | Disk | 12 GiB |
@@ -63,6 +63,7 @@ Advanced mode prompts for:
 - disk size
 - container storage
 - template storage
+- template filename, or `auto` for the latest available Debian 12 template
 - bridge
 - DHCP or static IPv4/gateway
 - privileged vs unprivileged container
@@ -82,6 +83,12 @@ OPENXPKI_RAM_MB=4096 \
 OPENXPKI_DB_BACKEND=mariadb \
 OPENXPKI_ADVANCED=0 \
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main/scripts/openxpki-lxc.sh)"
+```
+
+If you want to pin a specific Proxmox template instead of auto-selecting the latest Debian 12 template:
+
+```bash
+OPENXPKI_TEMPLATE=debian-12-standard_12.12-1_amd64.tar.zst ./scripts/openxpki-lxc.sh
 ```
 
 ## Database handling

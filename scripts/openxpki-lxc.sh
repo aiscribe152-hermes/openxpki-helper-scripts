@@ -16,7 +16,8 @@ OPENXPKI_BRIDGE="${OPENXPKI_BRIDGE:-vmbr0}"
 OPENXPKI_NET="${OPENXPKI_NET:-dhcp}"
 OPENXPKI_GATEWAY="${OPENXPKI_GATEWAY:-}"
 OPENXPKI_TEMPLATE_STORAGE="${OPENXPKI_TEMPLATE_STORAGE:-local}"
-OPENXPKI_TEMPLATE="${OPENXPKI_TEMPLATE:-debian-12-standard_12.7-1_amd64.tar.zst}"
+OPENXPKI_TEMPLATE="${OPENXPKI_TEMPLATE:-auto}"
+OPENXPKI_TEMPLATE_PATTERN="${OPENXPKI_TEMPLATE_PATTERN:-debian-12-standard_.*_amd64\.tar\.(zst|gz)}"
 OPENXPKI_PASSWORD="${OPENXPKI_PASSWORD:-}"
 OPENXPKI_UNPRIVILEGED="${OPENXPKI_UNPRIVILEGED:-1}"
 OPENXPKI_START="${OPENXPKI_START:-1}"
@@ -99,6 +100,7 @@ advanced_settings(){
   OPENXPKI_DISK_GB="$(ask "Disk GiB" "$OPENXPKI_DISK_GB")"
   OPENXPKI_STORAGE="$(ask "Container storage" "$OPENXPKI_STORAGE")"
   OPENXPKI_TEMPLATE_STORAGE="$(ask "Template storage" "$OPENXPKI_TEMPLATE_STORAGE")"
+  OPENXPKI_TEMPLATE="$(ask "Template filename, or auto for latest Debian 12" "$OPENXPKI_TEMPLATE")"
   OPENXPKI_BRIDGE="$(ask "Network bridge" "$OPENXPKI_BRIDGE")"
   OPENXPKI_NET="$(ask "IPv4 CIDR or dhcp" "$OPENXPKI_NET")"
   if [[ "$OPENXPKI_NET" != "dhcp" ]]; then
@@ -173,9 +175,21 @@ resolve_ctid(){
 }
 
 ensure_template(){
+  if [[ "$OPENXPKI_TEMPLATE" == "auto" || -z "$OPENXPKI_TEMPLATE" ]]; then
+    info "Resolving latest available Debian 12 LXC template"
+    pveam update >/dev/null
+    OPENXPKI_TEMPLATE="$(
+      pveam available --section system |
+        awk -v pattern="$OPENXPKI_TEMPLATE_PATTERN" '{ for (i = 1; i <= NF; i++) if ($i ~ pattern) print $i }' |
+        sort -V |
+        tail -n 1
+    )"
+    [[ -n "$OPENXPKI_TEMPLATE" ]] || fail "Could not find a Debian 12 standard amd64 template in pveam available. Run: pveam available --section system | grep debian-12"
+    ok "Selected template ${OPENXPKI_TEMPLATE}"
+  fi
+
   if ! pveam list "$OPENXPKI_TEMPLATE_STORAGE" 2>/dev/null | awk '{print $1}' | grep -qx "${OPENXPKI_TEMPLATE_STORAGE}:vztmpl/${OPENXPKI_TEMPLATE}"; then
     info "Downloading template ${OPENXPKI_TEMPLATE} to ${OPENXPKI_TEMPLATE_STORAGE}"
-    pveam update >/dev/null
     pveam download "$OPENXPKI_TEMPLATE_STORAGE" "$OPENXPKI_TEMPLATE"
   fi
 }
