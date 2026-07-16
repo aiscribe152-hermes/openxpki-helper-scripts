@@ -10,7 +10,7 @@ Early bootstrap scaffold. The scripts are intended for lab/dev PKI environments 
 
 ## What it does
 
-- Creates a Debian 13 LXC container on a Proxmox VE host.
+- Creates a Debian 12 LXC container on a Proxmox VE host.
 - Installs OpenXPKI package prerequisites from the OpenXPKI package repository.
 - Installs a local database server by default, but does not initialize the OpenXPKI schema or credentials automatically.
 - Clones `openxpki/openxpki-config` community branch into `/etc/openxpki`.
@@ -37,7 +37,7 @@ OPENXPKI_ADVANCED=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aisc
 | --- | --- |
 | CTID | next free ID from `pvesh get /cluster/nextid` |
 | Hostname | `openxpki` |
-| OS template | Debian 13 standard LXC template |
+| OS template | Debian 12 standard LXC template |
 | CPU | 2 cores |
 | RAM | 2048 MiB |
 | Disk | 12 GiB |
@@ -54,9 +54,9 @@ The installer includes a database package by default:
 
 The installer intentionally does **not** create the OpenXPKI database schema, database users, CA tokens, or production secrets. Those are PKI-sensitive operator steps documented in `/etc/openxpki/QUICKSTART.md` and `docs/operator-next-steps.md`.
 
-## Debian 13 note
+## Debian 12 note
 
-The LXC base defaults to Debian 13. As of this scaffold, the public OpenXPKI package index exposes `bookworm` packages, but no separate `trixie`/Debian 13 repository. The installer therefore keeps the OpenXPKI package source configurable via `OPENXPKI_PACKAGES_BASE` and `OPENXPKI_PACKAGES_SUITE`; review package compatibility before production use.
+The LXC base defaults to Debian 12/bookworm to match the currently published OpenXPKI package repository. The package source remains configurable via `OPENXPKI_PACKAGES_BASE` and `OPENXPKI_PACKAGES_SUITE` for future upstream repository changes.
 
 These can be overridden with environment variables. Example:
 

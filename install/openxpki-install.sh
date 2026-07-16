@@ -21,10 +21,7 @@ detect_debian(){
   # shellcheck source=/dev/null
   . /etc/os-release
   [[ "${ID:-}" == "debian" ]] || fail "This installer currently supports Debian containers only."
-  [[ "${VERSION_ID:-}" == "13" || "${VERSION_CODENAME:-}" == "trixie" ]] || warn "This helper now defaults to Debian 13; detected ${PRETTY_NAME:-unknown}."
-  if [[ "${VERSION_CODENAME:-}" != "$OPENXPKI_PACKAGES_SUITE" ]]; then
-    warn "Using OpenXPKI ${OPENXPKI_PACKAGES_SUITE} package repository on ${VERSION_CODENAME:-unknown}; override OPENXPKI_PACKAGES_BASE/SUITE if upstream publishes a native repository."
-  fi
+  [[ "${VERSION_CODENAME:-}" == "bookworm" ]] || warn "Tested with Debian 12/bookworm; detected ${PRETTY_NAME:-unknown}."
 }
 
 install_base(){
