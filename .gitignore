@@ -1,0 +1,10 @@
+# local/operator state
+.env
+*.log
+*.bak
+*.tmp
+
+# editor/OS
+.DS_Store
+.vscode/
+.idea/
