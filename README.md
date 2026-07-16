@@ -10,8 +10,9 @@ Early bootstrap scaffold. The scripts are intended for lab/dev PKI environments 
 
 ## What it does
 
-- Creates a Debian LXC container on a Proxmox VE host.
+- Creates a Debian 13 LXC container on a Proxmox VE host.
 - Installs OpenXPKI package prerequisites from the OpenXPKI package repository.
+- Installs a local database server by default, but does not initialize the OpenXPKI schema or credentials automatically.
 - Clones `openxpki/openxpki-config` community branch into `/etc/openxpki`.
 - Prepares the local configuration directory from upstream templates when available.
 - Leaves final CA/token/database realm hardening as explicit operator steps.
@@ -36,12 +37,26 @@ OPENXPKI_ADVANCED=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aisc
 | --- | --- |
 | CTID | next free ID from `pvesh get /cluster/nextid` |
 | Hostname | `openxpki` |
-| OS template | Debian 12 standard LXC template |
+| OS template | Debian 13 standard LXC template |
 | CPU | 2 cores |
 | RAM | 2048 MiB |
 | Disk | 12 GiB |
 | Network | DHCP on `vmbr0` |
 | Privilege | unprivileged container |
+
+## Database handling
+
+The installer includes a database package by default:
+
+- `OPENXPKI_DB_BACKEND=mariadb` installs MariaDB and Perl DB drivers.
+- `OPENXPKI_DB_BACKEND=postgresql` installs PostgreSQL and Perl DB drivers.
+- `OPENXPKI_DB_BACKEND=none` skips local database packages.
+
+The installer intentionally does **not** create the OpenXPKI database schema, database users, CA tokens, or production secrets. Those are PKI-sensitive operator steps documented in `/etc/openxpki/QUICKSTART.md` and `docs/operator-next-steps.md`.
+
+## Debian 13 note
+
+The LXC base defaults to Debian 13. As of this scaffold, the public OpenXPKI package index exposes `bookworm` packages, but no separate `trixie`/Debian 13 repository. The installer therefore keeps the OpenXPKI package source configurable via `OPENXPKI_PACKAGES_BASE` and `OPENXPKI_PACKAGES_SUITE`; review package compatibility before production use.
 
 These can be overridden with environment variables. Example:
 

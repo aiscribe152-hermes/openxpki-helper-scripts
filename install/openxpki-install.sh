@@ -4,6 +4,7 @@ set -Eeuo pipefail
 OPENXPKI_CONFIG_REPO="${OPENXPKI_CONFIG_REPO:-https://github.com/openxpki/openxpki-config.git}"
 OPENXPKI_CONFIG_BRANCH="${OPENXPKI_CONFIG_BRANCH:-community}"
 OPENXPKI_PACKAGES_BASE="${OPENXPKI_PACKAGES_BASE:-https://packages.openxpki.org/v3/bookworm}"
+OPENXPKI_PACKAGES_SUITE="${OPENXPKI_PACKAGES_SUITE:-bookworm}"
 OPENXPKI_DB_BACKEND="${OPENXPKI_DB_BACKEND:-mariadb}"
 OPENXPKI_SKIP_DB="${OPENXPKI_SKIP_DB:-0}"
 
@@ -20,7 +21,10 @@ detect_debian(){
   # shellcheck source=/dev/null
   . /etc/os-release
   [[ "${ID:-}" == "debian" ]] || fail "This installer currently supports Debian containers only."
-  [[ "${VERSION_CODENAME:-}" == "bookworm" ]] || warn "Tested with Debian bookworm; detected ${PRETTY_NAME:-unknown}."
+  [[ "${VERSION_ID:-}" == "13" || "${VERSION_CODENAME:-}" == "trixie" ]] || warn "This helper now defaults to Debian 13; detected ${PRETTY_NAME:-unknown}."
+  if [[ "${VERSION_CODENAME:-}" != "$OPENXPKI_PACKAGES_SUITE" ]]; then
+    warn "Using OpenXPKI ${OPENXPKI_PACKAGES_SUITE} package repository on ${VERSION_CODENAME:-unknown}; override OPENXPKI_PACKAGES_BASE/SUITE if upstream publishes a native repository."
+  fi
 }
 
 install_base(){
@@ -37,7 +41,7 @@ configure_openxpki_repo(){
   cat >/etc/apt/sources.list.d/openxpki.sources <<EOF
 Types: deb
 URIs: ${OPENXPKI_PACKAGES_BASE}/
-Suites: bookworm
+Suites: ${OPENXPKI_PACKAGES_SUITE}
 Components: release
 Signed-By: /usr/share/keyrings/openxpki.pgp
 EOF
