@@ -20,50 +20,160 @@ OPENXPKI_TEMPLATE="${OPENXPKI_TEMPLATE:-debian-12-standard_12.7-1_amd64.tar.zst}
 OPENXPKI_PASSWORD="${OPENXPKI_PASSWORD:-}"
 OPENXPKI_UNPRIVILEGED="${OPENXPKI_UNPRIVILEGED:-1}"
 OPENXPKI_START="${OPENXPKI_START:-1}"
-OPENXPKI_ADVANCED="${OPENXPKI_ADVANCED:-0}"
+OPENXPKI_ADVANCED="${OPENXPKI_ADVANCED:-}"
+OPENXPKI_DB_BACKEND="${OPENXPKI_DB_BACKEND:-mariadb}"
+OPENXPKI_SKIP_DB="${OPENXPKI_SKIP_DB:-0}"
 
-red=$'\033[0;31m'; green=$'\033[0;32m'; yellow=$'\033[0;33m'; blue=$'\033[0;34m'; reset=$'\033[0m'
+red=$'\033[0;31m'; green=$'\033[0;32m'; yellow=$'\033[0;33m'; blue=$'\033[0;34m'; bold=$'\033[1m'; reset=$'\033[0m'
 info(){ printf '%s[INFO]%s %s\n' "$blue" "$reset" "$*"; }
 ok(){ printf '%s[OK]%s %s\n' "$green" "$reset" "$*"; }
 warn(){ printf '%s[WARN]%s %s\n' "$yellow" "$reset" "$*"; }
 fail(){ printf '%s[ERROR]%s %s\n' "$red" "$reset" "$*" >&2; exit 1; }
 need(){ command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"; }
 
-trap 'fail "Failed at line $LINENO"' ERR
+err_report(){
+  local rc=$1 line=$2 command=$3
+  fail "Command failed with exit ${rc} at line ${line}: ${command}"
+}
+trap 'err_report "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 require_proxmox_host(){
   [[ $EUID -eq 0 ]] || fail "Run this script as root on a Proxmox VE host."
   need pct
   need pvesh
   need pveam
+  need pvesm
+  need qm
   need curl
 }
 
-prompt_if_advanced(){
-  [[ "$OPENXPKI_ADVANCED" == "1" ]] || return 0
-  read -r -p "CTID [${OPENXPKI_CTID:-auto}]: " v; OPENXPKI_CTID="${v:-$OPENXPKI_CTID}"
-  read -r -p "Hostname [${OPENXPKI_HOSTNAME}]: " v; OPENXPKI_HOSTNAME="${v:-$OPENXPKI_HOSTNAME}"
-  read -r -p "CPU cores [${OPENXPKI_CORES}]: " v; OPENXPKI_CORES="${v:-$OPENXPKI_CORES}"
-  read -r -p "RAM MiB [${OPENXPKI_RAM_MB}]: " v; OPENXPKI_RAM_MB="${v:-$OPENXPKI_RAM_MB}"
-  read -r -p "Disk GiB [${OPENXPKI_DISK_GB}]: " v; OPENXPKI_DISK_GB="${v:-$OPENXPKI_DISK_GB}"
-  read -r -p "Storage [${OPENXPKI_STORAGE}]: " v; OPENXPKI_STORAGE="${v:-$OPENXPKI_STORAGE}"
-  read -r -p "Bridge [${OPENXPKI_BRIDGE}]: " v; OPENXPKI_BRIDGE="${v:-$OPENXPKI_BRIDGE}"
-  read -r -p "IPv4 CIDR or dhcp [${OPENXPKI_NET}]: " v; OPENXPKI_NET="${v:-$OPENXPKI_NET}"
+is_tty(){ [[ -t 0 && -t 1 ]]; }
+
+ask(){
+  local prompt="$1" default="$2" value
+  read -r -p "${prompt} [${default}]: " value
+  printf '%s' "${value:-$default}"
+}
+
+ask_yes_no(){
+  local prompt="$1" default="${2:-y}" value suffix
+  if [[ "$default" == "y" ]]; then suffix="Y/n"; else suffix="y/N"; fi
+  read -r -p "${prompt} [${suffix}]: " value
+  value="${value:-$default}"
+  [[ "$value" =~ ^[Yy]$ ]]
+}
+
+choose_db_backend(){
+  local value
+  echo "Database backend:"
+  echo "  1) MariaDB local server (default)"
+  echo "  2) PostgreSQL local server"
+  echo "  3) None / external DB later"
+  read -r -p "Select database backend [1]: " value
+  case "${value:-1}" in
+    1) OPENXPKI_DB_BACKEND="mariadb"; OPENXPKI_SKIP_DB="0" ;;
+    2) OPENXPKI_DB_BACKEND="postgresql"; OPENXPKI_SKIP_DB="0" ;;
+    3) OPENXPKI_DB_BACKEND="none"; OPENXPKI_SKIP_DB="1" ;;
+    *) fail "Invalid database backend selection: ${value}" ;;
+  esac
+}
+
+show_detected_options(){
+  echo
+  echo "Detected rootdir-capable storages:"
+  pvesm status -content rootdir 2>/dev/null | awk 'NR>1 {print "  - "$1" ("$2")"}' || true
+  echo
+  echo "Detected bridges:"
+  ip -o link show type bridge 2>/dev/null | awk -F': ' '{print "  - "$2}' || true
+  echo
+}
+
+advanced_settings(){
+  show_detected_options
+  OPENXPKI_CTID="$(ask "CTID" "${OPENXPKI_CTID:-auto}")"
+  [[ "$OPENXPKI_CTID" == "auto" ]] && OPENXPKI_CTID=""
+  OPENXPKI_HOSTNAME="$(ask "Hostname" "$OPENXPKI_HOSTNAME")"
+  OPENXPKI_CORES="$(ask "CPU cores" "$OPENXPKI_CORES")"
+  OPENXPKI_RAM_MB="$(ask "RAM MiB" "$OPENXPKI_RAM_MB")"
+  OPENXPKI_SWAP_MB="$(ask "Swap MiB" "$OPENXPKI_SWAP_MB")"
+  OPENXPKI_DISK_GB="$(ask "Disk GiB" "$OPENXPKI_DISK_GB")"
+  OPENXPKI_STORAGE="$(ask "Container storage" "$OPENXPKI_STORAGE")"
+  OPENXPKI_TEMPLATE_STORAGE="$(ask "Template storage" "$OPENXPKI_TEMPLATE_STORAGE")"
+  OPENXPKI_BRIDGE="$(ask "Network bridge" "$OPENXPKI_BRIDGE")"
+  OPENXPKI_NET="$(ask "IPv4 CIDR or dhcp" "$OPENXPKI_NET")"
   if [[ "$OPENXPKI_NET" != "dhcp" ]]; then
-    read -r -p "Gateway [${OPENXPKI_GATEWAY}]: " v; OPENXPKI_GATEWAY="${v:-$OPENXPKI_GATEWAY}"
+    OPENXPKI_GATEWAY="$(ask "IPv4 gateway" "$OPENXPKI_GATEWAY")"
+  else
+    OPENXPKI_GATEWAY=""
   fi
+  OPENXPKI_UNPRIVILEGED="$(ask "Unprivileged container: 1=yes, 0=no" "$OPENXPKI_UNPRIVILEGED")"
+  choose_db_backend
+}
+
+print_summary(){
+  echo
+  echo "${bold}${APP} LXC settings${reset}"
+  echo "  CTID:              ${OPENXPKI_CTID:-auto}"
+  echo "  Hostname:          ${OPENXPKI_HOSTNAME}"
+  echo "  Template:          ${OPENXPKI_TEMPLATE_STORAGE}:vztmpl/${OPENXPKI_TEMPLATE}"
+  echo "  CPU/RAM/Swap:      ${OPENXPKI_CORES} cores / ${OPENXPKI_RAM_MB} MiB / ${OPENXPKI_SWAP_MB} MiB"
+  echo "  Disk:              ${OPENXPKI_STORAGE}:${OPENXPKI_DISK_GB}G"
+  echo "  Network:           ${OPENXPKI_BRIDGE}, ${OPENXPKI_NET}${OPENXPKI_GATEWAY:+, gw=${OPENXPKI_GATEWAY}}"
+  echo "  Unprivileged:      ${OPENXPKI_UNPRIVILEGED}"
+  echo "  DB backend:        ${OPENXPKI_DB_BACKEND}"
+  echo "  OpenXPKI config:   openxpki/openxpki-config community branch"
+  echo
+}
+
+configuration_menu(){
+  if [[ "${OPENXPKI_ADVANCED}" == "1" ]]; then
+    advanced_settings
+  elif [[ "${OPENXPKI_ADVANCED}" == "0" ]]; then
+    :
+  elif is_tty; then
+    print_summary
+    if ! ask_yes_no "Use default settings?" "y"; then
+      advanced_settings
+    fi
+  fi
+  print_summary
+  if is_tty; then
+    ask_yes_no "Create the container now?" "y" || fail "Cancelled by operator."
+  fi
+}
+
+next_ctid_fallback(){
+  local id
+  for id in $(seq 100 9999); do
+    pct status "$id" >/dev/null 2>&1 && continue
+    qm status "$id" >/dev/null 2>&1 && continue
+    echo "$id"
+    return 0
+  done
+  return 1
 }
 
 resolve_ctid(){
+  local next_id
   if [[ -z "$OPENXPKI_CTID" ]]; then
-    OPENXPKI_CTID="$(pvesh get /cluster/nextid)"
+    next_id="$(pvesh get /cluster/nextid 2>/dev/null || true)"
+    if [[ ! "$next_id" =~ ^[0-9]+$ ]]; then
+      warn "pvesh /cluster/nextid did not return a valid ID; scanning for a free ID."
+      next_id="$(next_ctid_fallback)" || fail "Unable to find a free CTID."
+    fi
+    OPENXPKI_CTID="$next_id"
   fi
-  pct status "$OPENXPKI_CTID" >/dev/null 2>&1 && fail "Container ID $OPENXPKI_CTID already exists."
+  [[ "$OPENXPKI_CTID" =~ ^[0-9]+$ ]] || fail "Invalid CTID: ${OPENXPKI_CTID}"
+  if pct status "$OPENXPKI_CTID" >/dev/null 2>&1; then
+    fail "Container ID ${OPENXPKI_CTID} already exists. Choose another CTID."
+  fi
+  if qm status "$OPENXPKI_CTID" >/dev/null 2>&1; then
+    fail "VM ID ${OPENXPKI_CTID} already exists. Choose another CTID."
+  fi
 }
 
 ensure_template(){
-  local template_path="/var/lib/vz/template/cache/${OPENXPKI_TEMPLATE}"
-  if [[ ! -f "$template_path" ]]; then
+  if ! pveam list "$OPENXPKI_TEMPLATE_STORAGE" 2>/dev/null | awk '{print $1}' | grep -qx "${OPENXPKI_TEMPLATE_STORAGE}:vztmpl/${OPENXPKI_TEMPLATE}"; then
     info "Downloading template ${OPENXPKI_TEMPLATE} to ${OPENXPKI_TEMPLATE_STORAGE}"
     pveam update >/dev/null
     pveam download "$OPENXPKI_TEMPLATE_STORAGE" "$OPENXPKI_TEMPLATE"
@@ -99,25 +209,31 @@ create_container(){
 run_install(){
   [[ "$OPENXPKI_START" == "1" ]] || pct start "$OPENXPKI_CTID"
   info "Waiting for container network"
-  for _ in {1..30}; do
-    pct exec "$OPENXPKI_CTID" -- bash -lc 'getent hosts deb.debian.org >/dev/null 2>&1' && break
+  local ready=0
+  for _ in {1..60}; do
+    if pct exec "$OPENXPKI_CTID" -- bash -lc 'getent hosts deb.debian.org >/dev/null 2>&1'; then
+      ready=1
+      break
+    fi
     sleep 2
   done
+  [[ "$ready" == "1" ]] || fail "Container network/DNS did not become ready. Check bridge/IP/gateway settings."
 
   info "Running OpenXPKI bootstrap inside container"
-  pct exec "$OPENXPKI_CTID" -- bash -lc "curl -fsSL '${INSTALL_SCRIPT_URL}' -o /root/openxpki-install.sh && bash /root/openxpki-install.sh"
+  pct exec "$OPENXPKI_CTID" -- bash -lc "export OPENXPKI_DB_BACKEND='${OPENXPKI_DB_BACKEND}' OPENXPKI_SKIP_DB='${OPENXPKI_SKIP_DB}'; curl -fsSL '${INSTALL_SCRIPT_URL}' -o /root/openxpki-install.sh && bash /root/openxpki-install.sh"
 }
 
 main(){
   require_proxmox_host
-  prompt_if_advanced
+  configuration_menu
   resolve_ctid
+  print_summary
   ensure_template
   create_container
   run_install
   ok "${APP} container ${OPENXPKI_CTID} created."
   echo "Next: pct enter ${OPENXPKI_CTID}"
-  echo "Review /etc/openxpki/QUICKSTART.md and docs/operator-next-steps.md in this repository."
+  echo "Review /root/OPENXPKI-NEXT-STEPS.txt inside the container."
 }
 
 main "$@"

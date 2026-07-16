@@ -25,10 +25,18 @@ Run from a Proxmox VE host as root:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main/scripts/openxpki-lxc.sh)"
 ```
 
-Advanced mode:
+When run interactively, the helper now shows a settings summary and asks whether to use defaults or enter advanced configuration, similar to the Community Scripts flow.
+
+Force advanced mode:
 
 ```bash
 OPENXPKI_ADVANCED=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main/scripts/openxpki-lxc.sh)"
+```
+
+Force unattended default mode:
+
+```bash
+OPENXPKI_ADVANCED=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main/scripts/openxpki-lxc.sh)"
 ```
 
 ## Defaults
@@ -43,6 +51,38 @@ OPENXPKI_ADVANCED=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aisc
 | Disk | 12 GiB |
 | Network | DHCP on `vmbr0` |
 | Privilege | unprivileged container |
+
+## Configurable deployment options
+
+Advanced mode prompts for:
+
+- CTID or auto-selected next ID
+- hostname
+- CPU cores
+- RAM and swap
+- disk size
+- container storage
+- template storage
+- bridge
+- DHCP or static IPv4/gateway
+- privileged vs unprivileged container
+- database backend: MariaDB, PostgreSQL, or none/external
+
+All settings can also be supplied with environment variables, for example:
+
+```bash
+OPENXPKI_CTID=250 \
+OPENXPKI_HOSTNAME=pki01 \
+OPENXPKI_STORAGE=local-lvm \
+OPENXPKI_BRIDGE=vmbr50 \
+OPENXPKI_NET=192.168.50.250/24 \
+OPENXPKI_GATEWAY=192.168.50.1 \
+OPENXPKI_DISK_GB=20 \
+OPENXPKI_RAM_MB=4096 \
+OPENXPKI_DB_BACKEND=mariadb \
+OPENXPKI_ADVANCED=0 \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main/scripts/openxpki-lxc.sh)"
+```
 
 ## Database handling
 
