@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+OPENXPKI_HELPER_RAW_BASE="${OPENXPKI_HELPER_RAW_BASE:-https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main}"
 OPENXPKI_CONFIG_REPO="${OPENXPKI_CONFIG_REPO:-https://github.com/openxpki/openxpki-config.git}"
 OPENXPKI_CONFIG_BRANCH="${OPENXPKI_CONFIG_BRANCH:-community}"
 OPENXPKI_PACKAGES_BASE="${OPENXPKI_PACKAGES_BASE:-https://packages.openxpki.org/v3/bookworm}"
@@ -74,6 +75,15 @@ install_openxpki_packages(){
   apt-get install -y libopenxpki-perl openxpki-i18n openxpki-cgi-session-driver "${db_packages[@]}"
 }
 
+
+install_container_helper_scripts(){
+  info "Installing OpenXPKI helper scripts inside container"
+  install -d -m 0755 /usr/local/sbin
+  retry_cmd 3 5 curl -fsSL "${OPENXPKI_HELPER_RAW_BASE}/container-scripts/openxpki-db-setup.sh" -o /usr/local/sbin/openxpki-db-setup
+  retry_cmd 3 5 curl -fsSL "${OPENXPKI_HELPER_RAW_BASE}/container-scripts/openxpki-production-setup.sh" -o /usr/local/sbin/openxpki-production-setup
+  chmod 0750 /usr/local/sbin/openxpki-db-setup /usr/local/sbin/openxpki-production-setup
+}
+
 deploy_config(){
   if [[ -e /etc/openxpki && ! -d /etc/openxpki/.git ]]; then
     local backup
@@ -125,8 +135,11 @@ What this helper already did:
 - Deployed upstream openxpki-config branch '${OPENXPKI_CONFIG_BRANCH}' to /etc/openxpki.
 - Created /etc/openxpki/local from upstream templates when available.
 - Enabled apache2 and the detected OpenXPKI systemd service where available.
+- Installed helper scripts:
+  /usr/local/sbin/openxpki-db-setup
+  /usr/local/sbin/openxpki-production-setup
 
-What still requires operator action:
+What still requires operator action unless you run the helper scripts below:
 - Database schema initialization.
 - Database user/password creation and /etc/openxpki/config.d/system/database.yaml.
 - oxi CLI authentication key creation and /etc/openxpki/config.d/system/cli.yaml.
@@ -135,6 +148,15 @@ What still requires operator action:
 - Issuer CA key/certificate/token creation.
 - Realm routing and profile policy review.
 - Service startup and validation.
+
+Optional in-container setup scripts:
+1. Production database setup:
+   /usr/local/sbin/openxpki-db-setup
+
+2. OpenXPKI realm/secrets/CLI/issuer setup:
+   /usr/local/sbin/openxpki-production-setup
+
+Run the DB script first, then the OpenXPKI setup script.
 
 Authoritative upstream guide:
   /etc/openxpki/QUICKSTART.md
@@ -164,16 +186,16 @@ EOF
 
 Mode-specific notes: guided
 - Guided setup was requested.
-- This version records the requested mode and provides the production checklist, but does not yet generate DB credentials, realm config, token secrets, datavault keys, or issuer CA keys automatically.
-- Recommended production sequence:
+- Helper scripts are installed for the production sequence:
+  1. Run /usr/local/sbin/openxpki-db-setup to create the database/user, load schema, and write database.yaml.
+  2. Run /usr/local/sbin/openxpki-production-setup to set realm config, crypto secrets, oxi CLI auth, and optionally import a software issuer CA token.
+- Recommended production review sequence:
   1. Decide realm name and CA policy.
-  2. Create a database and least-privilege OpenXPKI database user.
-  3. Write /etc/openxpki/config.d/system/database.yaml.
-  4. Run 'oxi cli create' for your operational account and configure config.d/system/cli.yaml.
-  5. Generate crypto secrets and store recovery copies in your secret manager.
-  6. Create/import datavault and issuer tokens.
-  7. Remove unused workflows/protocols such as EST/SCEP if not required.
-  8. Start service and validate 'oxi cli ping'.
+  2. Run the DB setup script and store /root/OPENXPKI-DB-CREDENTIALS.txt securely.
+  3. Run the OpenXPKI setup script and store /root/OPENXPKI-PRODUCTION-SECRETS.txt securely.
+  4. Prefer offline/HSM issuer keys for high-assurance production.
+  5. Remove unused workflows/protocols such as EST/SCEP if not required.
+  6. Start service and validate 'oxi cli ping'.
 EOF
       ;;
     lab)
@@ -181,8 +203,8 @@ EOF
 
 Mode-specific notes: lab
 - Lab/demo setup was requested.
-- This version records the requested mode and provides the lab checklist, but does not yet auto-generate disposable CA secrets.
-- If you use generated test secrets manually, mark the CA as disposable and do not reuse it for production.
+- You may run the same setup scripts for a disposable lab, but use a clearly disposable realm name and generated secrets.
+- If you generate test secrets or software issuer keys, mark the CA as disposable and do not reuse it for production.
 - Recommended lab sequence:
   1. Use a clearly disposable realm name such as democa or labca.
   2. Generate random DB/token/datavault secrets and save them under /root only for the lab.
@@ -228,6 +250,7 @@ main(){
   configure_openxpki_repo
   install_openxpki_packages
   deploy_config
+  install_container_helper_scripts
   write_operator_notes
   enable_services
   ok "OpenXPKI bootstrap finished. Review /root/OPENXPKI-NEXT-STEPS.txt before starting production configuration."

@@ -13,6 +13,8 @@ jobs:
         run: |
           bash -n scripts/openxpki-lxc.sh
           bash -n install/openxpki-install.sh
+          bash -n container-scripts/openxpki-db-setup.sh
+          bash -n container-scripts/openxpki-production-setup.sh
       - name: ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:

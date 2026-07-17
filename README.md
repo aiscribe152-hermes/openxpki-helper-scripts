@@ -17,6 +17,7 @@ Early bootstrap scaffold. The scripts are intended for lab/dev PKI environments 
 - Clones `openxpki/openxpki-config` community branch into `/etc/openxpki`.
 - Retries OpenXPKI config retrieval and falls back to a GitHub branch tarball if `git clone` is interrupted.
 - Prepares the local configuration directory from upstream templates when available.
+- Installs optional in-container setup scripts for DB initialization and OpenXPKI realm/secrets/issuer setup.
 - Asks which OpenXPKI initialization mode you want and writes mode-specific container notes.
 - Leaves final CA/token/database realm hardening as explicit operator steps.
 
@@ -116,6 +117,22 @@ The installer includes a database package by default:
 
 The installer intentionally does **not** create the OpenXPKI database schema, database users, CA tokens, or production secrets. Those are PKI-sensitive operator steps documented in `/etc/openxpki/QUICKSTART.md` and `docs/operator-next-steps.md`.
 
+Optional in-container setup scripts are installed:
+
+```bash
+/usr/local/sbin/openxpki-db-setup
+/usr/local/sbin/openxpki-production-setup
+```
+
+Run them in this order if you want the helper to perform the production setup steps:
+
+```bash
+openxpki-db-setup
+openxpki-production-setup
+```
+
+The DB script creates the database/user, loads the OpenXPKI schema, and writes `config.d/system/database.yaml`. The production setup script prompts for realm, base URL, OpenXPKI secrets, CLI key, and optionally generates/imports a software issuer CA token. For high-assurance production PKI, prefer offline/HSM-generated issuer key material.
+
 ## OpenXPKI initialization modes
 
 The helper asks which initialization mode to record:
@@ -147,6 +164,8 @@ OPENXPKI_CTID=250 OPENXPKI_HOSTNAME=pki01 OPENXPKI_BRIDGE=vmbr50 OPENXPKI_DISK_G
 
 - `scripts/openxpki-lxc.sh` - Proxmox host-side LXC creation helper.
 - `install/openxpki-install.sh` - container-side OpenXPKI bootstrap.
+- `container-scripts/openxpki-db-setup.sh` - in-container production database/user/schema setup.
+- `container-scripts/openxpki-production-setup.sh` - in-container realm/secrets/CLI/issuer setup.
 - `docs/operator-next-steps.md` - manual hardening/configuration tasks after bootstrap.
 
 ## Important security notes
