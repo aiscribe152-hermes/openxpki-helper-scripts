@@ -15,6 +15,8 @@ OPENXPKI_STORAGE="${OPENXPKI_STORAGE:-local-lvm}"
 OPENXPKI_BRIDGE="${OPENXPKI_BRIDGE:-vmbr0}"
 OPENXPKI_NET="${OPENXPKI_NET:-dhcp}"
 OPENXPKI_GATEWAY="${OPENXPKI_GATEWAY:-}"
+OPENXPKI_NAMESERVER="${OPENXPKI_NAMESERVER:-}"
+OPENXPKI_SEARCHDOMAIN="${OPENXPKI_SEARCHDOMAIN:-}"
 OPENXPKI_TEMPLATE_STORAGE="${OPENXPKI_TEMPLATE_STORAGE:-local}"
 OPENXPKI_TEMPLATE="${OPENXPKI_TEMPLATE:-auto}"
 OPENXPKI_TEMPLATE_PATTERN="${OPENXPKI_TEMPLATE_PATTERN:-debian-12-standard_.*_amd64\.tar\.(zst|gz)}"
@@ -108,6 +110,8 @@ advanced_settings(){
   else
     OPENXPKI_GATEWAY=""
   fi
+  OPENXPKI_NAMESERVER="$(ask "DNS server(s), space-separated, or blank for Proxmox/DHCP default" "$OPENXPKI_NAMESERVER")"
+  OPENXPKI_SEARCHDOMAIN="$(ask "DNS search domain, or blank" "$OPENXPKI_SEARCHDOMAIN")"
   OPENXPKI_UNPRIVILEGED="$(ask "Unprivileged container: 1=yes, 0=no" "$OPENXPKI_UNPRIVILEGED")"
   choose_db_backend
 }
@@ -121,6 +125,7 @@ print_summary(){
   echo "  CPU/RAM/Swap:      ${OPENXPKI_CORES} cores / ${OPENXPKI_RAM_MB} MiB / ${OPENXPKI_SWAP_MB} MiB"
   echo "  Disk:              ${OPENXPKI_STORAGE}:${OPENXPKI_DISK_GB}G"
   echo "  Network:           ${OPENXPKI_BRIDGE}, ${OPENXPKI_NET}${OPENXPKI_GATEWAY:+, gw=${OPENXPKI_GATEWAY}}"
+  echo "  DNS:               ${OPENXPKI_NAMESERVER:-default}${OPENXPKI_SEARCHDOMAIN:+, search=${OPENXPKI_SEARCHDOMAIN}}"
   echo "  Unprivileged:      ${OPENXPKI_UNPRIVILEGED}"
   echo "  DB backend:        ${OPENXPKI_DB_BACKEND}"
   echo "  OpenXPKI config:   openxpki/openxpki-config community branch"
@@ -205,6 +210,10 @@ create_container(){
     warn "No OPENXPKI_PASSWORD supplied; Proxmox may prompt for a root password."
   fi
 
+  local dns_args=()
+  [[ -n "$OPENXPKI_NAMESERVER" ]] && dns_args+=(--nameserver "$OPENXPKI_NAMESERVER")
+  [[ -n "$OPENXPKI_SEARCHDOMAIN" ]] && dns_args+=(--searchdomain "$OPENXPKI_SEARCHDOMAIN")
+
   info "Creating ${APP} container ${OPENXPKI_CTID} (${OPENXPKI_HOSTNAME})"
   pct create "$OPENXPKI_CTID" "${OPENXPKI_TEMPLATE_STORAGE}:vztmpl/${OPENXPKI_TEMPLATE}" \
     --hostname "$OPENXPKI_HOSTNAME" \
@@ -217,6 +226,7 @@ create_container(){
     --features nesting=1 \
     --onboot 1 \
     --start "$OPENXPKI_START" \
+    "${dns_args[@]}" \
     "${pw_args[@]}"
 }
 

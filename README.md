@@ -52,6 +52,7 @@ OPENXPKI_ADVANCED=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aisc
 | RAM | 2048 MiB |
 | Disk | 12 GiB |
 | Network | DHCP on `vmbr0` |
+| DNS | Proxmox/DHCP default unless set |
 | Privilege | unprivileged container |
 
 ## Configurable deployment options
@@ -68,6 +69,8 @@ Advanced mode prompts for:
 - template filename, or `auto` for the latest available Debian 12 template
 - bridge
 - DHCP or static IPv4/gateway
+- DNS nameserver(s)
+- DNS search domain
 - privileged vs unprivileged container
 - database backend: MariaDB, PostgreSQL, or none/external
 
@@ -80,6 +83,8 @@ OPENXPKI_STORAGE=local-lvm \
 OPENXPKI_BRIDGE=vmbr50 \
 OPENXPKI_NET=192.168.50.250/24 \
 OPENXPKI_GATEWAY=192.168.50.1 \
+OPENXPKI_NAMESERVER="192.168.225.1 1.1.1.1" \
+OPENXPKI_SEARCHDOMAIN=streamio.us \
 OPENXPKI_DISK_GB=20 \
 OPENXPKI_RAM_MB=4096 \
 OPENXPKI_DB_BACKEND=mariadb \
