@@ -17,6 +17,7 @@ Early bootstrap scaffold. The scripts are intended for lab/dev PKI environments 
 - Clones `openxpki/openxpki-config` community branch into `/etc/openxpki`.
 - Retries OpenXPKI config retrieval and falls back to a GitHub branch tarball if `git clone` is interrupted.
 - Prepares the local configuration directory from upstream templates when available.
+- Asks which OpenXPKI initialization mode you want and writes mode-specific container notes.
 - Leaves final CA/token/database realm hardening as explicit operator steps.
 
 ## Quick start
@@ -73,6 +74,7 @@ Advanced mode prompts for:
 - DNS search domain
 - privileged vs unprivileged container
 - database backend: MariaDB, PostgreSQL, or none/external
+- initialization mode: none, guided notes, or lab/demo notes
 
 All settings can also be supplied with environment variables, for example:
 
@@ -88,6 +90,7 @@ OPENXPKI_SEARCHDOMAIN=streamio.us \
 OPENXPKI_DISK_GB=20 \
 OPENXPKI_RAM_MB=4096 \
 OPENXPKI_DB_BACKEND=mariadb \
+OPENXPKI_INIT_MODE=guided \
 OPENXPKI_ADVANCED=0 \
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main/scripts/openxpki-lxc.sh)"
 ```
@@ -107,6 +110,23 @@ The installer includes a database package by default:
 - `OPENXPKI_DB_BACKEND=none` skips local database packages.
 
 The installer intentionally does **not** create the OpenXPKI database schema, database users, CA tokens, or production secrets. Those are PKI-sensitive operator steps documented in `/etc/openxpki/QUICKSTART.md` and `docs/operator-next-steps.md`.
+
+## OpenXPKI initialization modes
+
+The helper asks which initialization mode to record:
+
+- `none` - default; package/config bootstrap only.
+- `guided` - writes a production-oriented checklist for realms, DB credentials, crypto secrets, datavault, issuer CA, and validation.
+- `lab` - writes a disposable lab/demo checklist and warnings.
+
+The current helper records the selected mode and writes detailed next-step notes inside the container. It does not yet auto-generate CA keys, token passwords, datavault secrets, or realm policy.
+
+Container notes are written to:
+
+```bash
+/root/OPENXPKI-NEXT-STEPS.txt
+/root/OPENXPKI-INIT-SELECTION.txt
+```
 
 ## Debian 12 note
 

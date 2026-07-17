@@ -26,6 +26,7 @@ OPENXPKI_START="${OPENXPKI_START:-1}"
 OPENXPKI_ADVANCED="${OPENXPKI_ADVANCED:-}"
 OPENXPKI_DB_BACKEND="${OPENXPKI_DB_BACKEND:-mariadb}"
 OPENXPKI_SKIP_DB="${OPENXPKI_SKIP_DB:-0}"
+OPENXPKI_INIT_MODE="${OPENXPKI_INIT_MODE:-}"
 
 red=$'\033[0;31m'; green=$'\033[0;32m'; yellow=$'\033[0;33m'; blue=$'\033[0;34m'; bold=$'\033[1m'; reset=$'\033[0m'
 info(){ printf '%s[INFO]%s %s\n' "$blue" "$reset" "$*"; }
@@ -81,6 +82,21 @@ choose_db_backend(){
   esac
 }
 
+choose_init_mode(){
+  local value
+  echo "OpenXPKI initialization after package install:"
+  echo "  1) none   - package/config bootstrap only (recommended default)"
+  echo "  2) guided - write guided production checklist for realm/password setup"
+  echo "  3) lab    - write disposable lab/demo checklist and warnings"
+  read -r -p "Select initialization mode [1]: " value
+  case "${value:-1}" in
+    1|none) OPENXPKI_INIT_MODE="none" ;;
+    2|guided) OPENXPKI_INIT_MODE="guided" ;;
+    3|lab) OPENXPKI_INIT_MODE="lab" ;;
+    *) fail "Invalid initialization mode selection: ${value}" ;;
+  esac
+}
+
 show_detected_options(){
   echo
   echo "Detected rootdir-capable storages:"
@@ -128,6 +144,7 @@ print_summary(){
   echo "  DNS:               ${OPENXPKI_NAMESERVER:-default}${OPENXPKI_SEARCHDOMAIN:+, search=${OPENXPKI_SEARCHDOMAIN}}"
   echo "  Unprivileged:      ${OPENXPKI_UNPRIVILEGED}"
   echo "  DB backend:        ${OPENXPKI_DB_BACKEND}"
+  echo "  Init mode:         ${OPENXPKI_INIT_MODE:-none}"
   echo "  OpenXPKI config:   openxpki/openxpki-config community branch"
   echo
 }
@@ -141,6 +158,13 @@ configuration_menu(){
     print_summary
     if ! ask_yes_no "Use default settings?" "y"; then
       advanced_settings
+    fi
+  fi
+  if [[ -z "${OPENXPKI_INIT_MODE}" ]]; then
+    if is_tty; then
+      choose_init_mode
+    else
+      OPENXPKI_INIT_MODE="none"
     fi
   fi
   print_summary
@@ -247,7 +271,7 @@ run_install(){
   pct exec "$OPENXPKI_CTID" -- bash -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends ca-certificates curl'
 
   info "Running OpenXPKI bootstrap inside container"
-  pct exec "$OPENXPKI_CTID" -- bash -lc "export OPENXPKI_DB_BACKEND='${OPENXPKI_DB_BACKEND}' OPENXPKI_SKIP_DB='${OPENXPKI_SKIP_DB}'; curl -fsSL '${INSTALL_SCRIPT_URL}' -o /root/openxpki-install.sh && bash /root/openxpki-install.sh"
+  pct exec "$OPENXPKI_CTID" -- bash -lc "export OPENXPKI_DB_BACKEND='${OPENXPKI_DB_BACKEND}' OPENXPKI_SKIP_DB='${OPENXPKI_SKIP_DB}' OPENXPKI_INIT_MODE='${OPENXPKI_INIT_MODE}'; curl -fsSL '${INSTALL_SCRIPT_URL}' -o /root/openxpki-install.sh && bash /root/openxpki-install.sh"
 }
 
 main(){

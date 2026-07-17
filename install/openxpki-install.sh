@@ -7,6 +7,7 @@ OPENXPKI_PACKAGES_BASE="${OPENXPKI_PACKAGES_BASE:-https://packages.openxpki.org/
 OPENXPKI_PACKAGES_SUITE="${OPENXPKI_PACKAGES_SUITE:-bookworm}"
 OPENXPKI_DB_BACKEND="${OPENXPKI_DB_BACKEND:-mariadb}"
 OPENXPKI_SKIP_DB="${OPENXPKI_SKIP_DB:-0}"
+OPENXPKI_INIT_MODE="${OPENXPKI_INIT_MODE:-none}"
 
 red=$'\033[0;31m'; green=$'\033[0;32m'; yellow=$'\033[0;33m'; blue=$'\033[0;34m'; reset=$'\033[0m'
 info(){ printf '%s[INFO]%s %s\n' "$blue" "$reset" "$*"; }
@@ -106,26 +107,107 @@ deploy_config(){
   chmod -R go-rwx /etc/openxpki/local 2>/dev/null || true
 }
 
-configure_database_hint(){
-  [[ "$OPENXPKI_SKIP_DB" == "1" ]] && return 0
-  cat >/root/OPENXPKI-NEXT-STEPS.txt <<'EOF'
-OpenXPKI package/config bootstrap is complete, but PKI initialization remains manual.
+write_operator_notes(){
+  case "$OPENXPKI_INIT_MODE" in
+    none|guided|lab) ;;
+    *) warn "Unknown OPENXPKI_INIT_MODE=${OPENXPKI_INIT_MODE}; recording as none"; OPENXPKI_INIT_MODE="none" ;;
+  esac
 
-Required next steps:
-1. Review /etc/openxpki/QUICKSTART.md.
-2. Initialize your database using /etc/openxpki/contrib/sql for your selected backend.
-3. Set /etc/openxpki/config.d/system/database.yaml.
-4. Generate and protect crypto secrets under /etc/openxpki/local.
-5. Start and inspect openxpki-serverd:
-   systemctl start openxpki-serverd
-   journalctl -u openxpki-serverd -f
-6. Validate:
-   oxi cli ping
+  cat >/root/OPENXPKI-NEXT-STEPS.txt <<EOF
+OpenXPKI package/config bootstrap is complete.
 
-Do not deploy this as production PKI until database backups, CA key backup/recovery,
-realm/profile policy, and access controls are reviewed.
+Selected initialization mode: ${OPENXPKI_INIT_MODE}
+Selected database backend: ${OPENXPKI_DB_BACKEND}
+Database package install skipped: ${OPENXPKI_SKIP_DB}
+
+What this helper already did:
+- Installed OpenXPKI packages and selected database packages.
+- Deployed upstream openxpki-config branch '${OPENXPKI_CONFIG_BRANCH}' to /etc/openxpki.
+- Created /etc/openxpki/local from upstream templates when available.
+- Enabled apache2 and the detected OpenXPKI systemd service where available.
+
+What still requires operator action:
+- Database schema initialization.
+- Database user/password creation and /etc/openxpki/config.d/system/database.yaml.
+- oxi CLI authentication key creation and /etc/openxpki/config.d/system/cli.yaml.
+- Crypto secret values under OpenXPKI config/local files.
+- Datavault token creation/import.
+- Issuer CA key/certificate/token creation.
+- Realm routing and profile policy review.
+- Service startup and validation.
+
+Authoritative upstream guide:
+  /etc/openxpki/QUICKSTART.md
+
+Core validation commands after completing initialization:
+  systemctl start openxpki-serverd || systemctl start openxpkid
+  journalctl -u openxpki-serverd -f || journalctl -u openxpkid -f
+  oxi cli ping
+
+Security notes:
+- /etc/openxpki/local and CA/token key material must be backed up securely.
+- Do not commit /etc/openxpki/local secrets to Git.
+- Do not deploy as production PKI until database restore, datavault restore, issuer-key recovery, realm/profile policy, and access controls have been tested.
 EOF
-  warn "Database/token/realm initialization is intentionally left for operator review. See /root/OPENXPKI-NEXT-STEPS.txt"
+
+  case "$OPENXPKI_INIT_MODE" in
+    none)
+      cat >>/root/OPENXPKI-NEXT-STEPS.txt <<'EOF'
+
+Mode-specific notes: none
+- The helper intentionally stopped after package/config bootstrap.
+- Use this mode for production-oriented installs where secrets, realms, and CA policy are handled deliberately.
+EOF
+      ;;
+    guided)
+      cat >>/root/OPENXPKI-NEXT-STEPS.txt <<'EOF'
+
+Mode-specific notes: guided
+- Guided setup was requested.
+- This version records the requested mode and provides the production checklist, but does not yet generate DB credentials, realm config, token secrets, datavault keys, or issuer CA keys automatically.
+- Recommended production sequence:
+  1. Decide realm name and CA policy.
+  2. Create a database and least-privilege OpenXPKI database user.
+  3. Write /etc/openxpki/config.d/system/database.yaml.
+  4. Run 'oxi cli create' for your operational account and configure config.d/system/cli.yaml.
+  5. Generate crypto secrets and store recovery copies in your secret manager.
+  6. Create/import datavault and issuer tokens.
+  7. Remove unused workflows/protocols such as EST/SCEP if not required.
+  8. Start service and validate 'oxi cli ping'.
+EOF
+      ;;
+    lab)
+      cat >>/root/OPENXPKI-NEXT-STEPS.txt <<'EOF'
+
+Mode-specific notes: lab
+- Lab/demo setup was requested.
+- This version records the requested mode and provides the lab checklist, but does not yet auto-generate disposable CA secrets.
+- If you use generated test secrets manually, mark the CA as disposable and do not reuse it for production.
+- Recommended lab sequence:
+  1. Use a clearly disposable realm name such as democa or labca.
+  2. Generate random DB/token/datavault secrets and save them under /root only for the lab.
+  3. Create short-lived datavault and issuer CA keys.
+  4. Validate the WebUI and 'oxi cli ping'.
+  5. Destroy and rebuild before any production CA work.
+EOF
+      ;;
+  esac
+
+  cat >/root/OPENXPKI-INIT-SELECTION.txt <<EOF
+OPENXPKI_INIT_MODE=${OPENXPKI_INIT_MODE}
+OPENXPKI_DB_BACKEND=${OPENXPKI_DB_BACKEND}
+OPENXPKI_SKIP_DB=${OPENXPKI_SKIP_DB}
+EOF
+
+  if [[ -f /etc/motd ]] && ! grep -q 'OPENXPKI-NEXT-STEPS' /etc/motd; then
+    cat >>/etc/motd <<'EOF'
+
+OpenXPKI helper notes:
+  Review /root/OPENXPKI-NEXT-STEPS.txt before initializing realms, passwords, tokens, or CA keys.
+EOF
+  fi
+
+  warn "OpenXPKI realm/password/token initialization still requires operator action. See /root/OPENXPKI-NEXT-STEPS.txt"
 }
 
 enable_services(){
@@ -146,7 +228,7 @@ main(){
   configure_openxpki_repo
   install_openxpki_packages
   deploy_config
-  configure_database_hint
+  write_operator_notes
   enable_services
   ok "OpenXPKI bootstrap finished. Review /root/OPENXPKI-NEXT-STEPS.txt before starting production configuration."
 }
