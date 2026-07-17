@@ -54,6 +54,7 @@ OPENXPKI_ADVANCED=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aisc
 | Disk | 12 GiB |
 | Network | DHCP on `vmbr0` |
 | DNS | Proxmox/DHCP default unless set |
+| Root password | prompted interactively unless supplied or unattended mode is used |
 | Privilege | unprivileged container |
 
 ## Configurable deployment options
@@ -72,6 +73,7 @@ Advanced mode prompts for:
 - DHCP or static IPv4/gateway
 - DNS nameserver(s)
 - DNS search domain
+- root password for container console/login access
 - privileged vs unprivileged container
 - database backend: MariaDB, PostgreSQL, or none/external
 - initialization mode: none, guided notes, or lab/demo notes
@@ -87,6 +89,7 @@ OPENXPKI_NET=192.168.50.250/24 \
 OPENXPKI_GATEWAY=192.168.50.1 \
 OPENXPKI_NAMESERVER="192.168.225.1 1.1.1.1" \
 OPENXPKI_SEARCHDOMAIN=streamio.us \
+OPENXPKI_PASSWORD='change-this-securely' \
 OPENXPKI_DISK_GB=20 \
 OPENXPKI_RAM_MB=4096 \
 OPENXPKI_DB_BACKEND=mariadb \
@@ -94,6 +97,8 @@ OPENXPKI_INIT_MODE=guided \
 OPENXPKI_ADVANCED=0 \
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/aiscribe152-hermes/openxpki-helper-scripts/main/scripts/openxpki-lxc.sh)"
 ```
+
+If no `OPENXPKI_PASSWORD` is supplied during an interactive run, the helper asks whether to set a root password. In unattended mode (`OPENXPKI_ADVANCED=0`), no password is prompted; use `pct enter <CTID>` from the Proxmox host or set the password later with `pct exec <CTID> -- passwd root`.
 
 If you want to pin a specific Proxmox template instead of auto-selecting the latest Debian 12 template:
 

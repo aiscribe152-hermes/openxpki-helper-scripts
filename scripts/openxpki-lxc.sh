@@ -67,6 +67,20 @@ ask_yes_no(){
   [[ "$value" =~ ^[Yy]$ ]]
 }
 
+ask_password(){
+  local first second
+  read -r -s -p "Root password for container [leave blank to skip]: " first
+  echo
+  if [[ -z "$first" ]]; then
+    OPENXPKI_PASSWORD=""
+    return 0
+  fi
+  read -r -s -p "Confirm root password: " second
+  echo
+  [[ "$first" == "$second" ]] || fail "Root passwords did not match."
+  OPENXPKI_PASSWORD="$first"
+}
+
 choose_db_backend(){
   local value
   echo "Database backend:"
@@ -142,6 +156,7 @@ print_summary(){
   echo "  Disk:              ${OPENXPKI_STORAGE}:${OPENXPKI_DISK_GB}G"
   echo "  Network:           ${OPENXPKI_BRIDGE}, ${OPENXPKI_NET}${OPENXPKI_GATEWAY:+, gw=${OPENXPKI_GATEWAY}}"
   echo "  DNS:               ${OPENXPKI_NAMESERVER:-default}${OPENXPKI_SEARCHDOMAIN:+, search=${OPENXPKI_SEARCHDOMAIN}}"
+  echo "  Root password:     $([[ -n "$OPENXPKI_PASSWORD" ]] && echo set || echo not-set)"
   echo "  Unprivileged:      ${OPENXPKI_UNPRIVILEGED}"
   echo "  DB backend:        ${OPENXPKI_DB_BACKEND}"
   echo "  Init mode:         ${OPENXPKI_INIT_MODE:-none}"
@@ -165,6 +180,11 @@ configuration_menu(){
       choose_init_mode
     else
       OPENXPKI_INIT_MODE="none"
+    fi
+  fi
+  if [[ -z "$OPENXPKI_PASSWORD" && "${OPENXPKI_ADVANCED}" != "0" && $(is_tty && echo yes || echo no) == "yes" ]]; then
+    if ask_yes_no "Set a root password for console/login access?" "y"; then
+      ask_password
     fi
   fi
   print_summary
