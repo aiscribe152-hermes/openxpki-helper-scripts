@@ -17,6 +17,21 @@ trap 'fail "Failed at line $LINENO"' ERR
 
 require_root(){ [[ $EUID -eq 0 ]] || fail "Run inside the container as root."; }
 
+retry_cmd(){
+  local attempts="$1"
+  local delay="$2"
+  shift 2
+  local n=1
+  until "$@"; do
+    if [[ "$n" -ge "$attempts" ]]; then
+      return 1
+    fi
+    warn "Attempt ${n}/${attempts} failed: $*; retrying in ${delay}s"
+    sleep "$delay"
+    n=$((n + 1))
+  done
+}
+
 detect_debian(){
   # shellcheck source=/dev/null
   . /etc/os-release
@@ -68,7 +83,12 @@ deploy_config(){
 
   if [[ ! -d /etc/openxpki/.git ]]; then
     info "Cloning OpenXPKI community configuration"
-    git clone --depth 1 --branch "$OPENXPKI_CONFIG_BRANCH" "$OPENXPKI_CONFIG_REPO" /etc/openxpki
+    if ! retry_cmd 3 5 git -c http.version=HTTP/1.1 clone --depth 1 --branch "$OPENXPKI_CONFIG_BRANCH" "$OPENXPKI_CONFIG_REPO" /etc/openxpki; then
+      warn "Git clone failed; falling back to GitHub branch tarball download"
+      rm -rf /etc/openxpki
+      mkdir -p /etc/openxpki
+      retry_cmd 3 5 bash -lc "curl -fL --retry 3 --retry-delay 5 'https://codeload.github.com/openxpki/openxpki-config/tar.gz/refs/heads/${OPENXPKI_CONFIG_BRANCH}' | tar -xz --strip-components=1 -C /etc/openxpki"
+    fi
   else
     info "OpenXPKI configuration already present; skipping clone"
   fi

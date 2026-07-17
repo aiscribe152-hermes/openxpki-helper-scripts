@@ -15,6 +15,7 @@ Early bootstrap scaffold. The scripts are intended for lab/dev PKI environments 
 - Installs a local database server by default, but does not initialize the OpenXPKI schema or credentials automatically.
 - Installs minimal bootstrap tools (`ca-certificates` and `curl`) in the fresh container before fetching the OpenXPKI installer.
 - Clones `openxpki/openxpki-config` community branch into `/etc/openxpki`.
+- Retries OpenXPKI config retrieval and falls back to a GitHub branch tarball if `git clone` is interrupted.
 - Prepares the local configuration directory from upstream templates when available.
 - Leaves final CA/token/database realm hardening as explicit operator steps.
 
