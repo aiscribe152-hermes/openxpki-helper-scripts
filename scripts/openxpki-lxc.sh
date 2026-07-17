@@ -233,6 +233,9 @@ run_install(){
   done
   [[ "$ready" == "1" ]] || fail "Container network/DNS did not become ready. Check bridge/IP/gateway settings."
 
+  info "Installing container bootstrap prerequisites"
+  pct exec "$OPENXPKI_CTID" -- bash -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends ca-certificates curl'
+
   info "Running OpenXPKI bootstrap inside container"
   pct exec "$OPENXPKI_CTID" -- bash -lc "export OPENXPKI_DB_BACKEND='${OPENXPKI_DB_BACKEND}' OPENXPKI_SKIP_DB='${OPENXPKI_SKIP_DB}'; curl -fsSL '${INSTALL_SCRIPT_URL}' -o /root/openxpki-install.sh && bash /root/openxpki-install.sh"
 }

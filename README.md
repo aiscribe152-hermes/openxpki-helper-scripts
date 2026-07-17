@@ -13,6 +13,7 @@ Early bootstrap scaffold. The scripts are intended for lab/dev PKI environments 
 - Creates a Debian 12 LXC container on a Proxmox VE host.
 - Installs OpenXPKI package prerequisites from the OpenXPKI package repository.
 - Installs a local database server by default, but does not initialize the OpenXPKI schema or credentials automatically.
+- Installs minimal bootstrap tools (`ca-certificates` and `curl`) in the fresh container before fetching the OpenXPKI installer.
 - Clones `openxpki/openxpki-config` community branch into `/etc/openxpki`.
 - Prepares the local configuration directory from upstream templates when available.
 - Leaves final CA/token/database realm hardening as explicit operator steps.
